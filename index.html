@@ -990,12 +990,13 @@
       pointer-events: auto;
       padding: 0;
       text-align: left;
+      transform: translate(-50%, -50%);
       transition: transform 180ms ease, box-shadow 180ms ease;
     }
 
     .family-node:hover,
     .family-node:focus-visible {
-      transform: translateY(-4px);
+      transform: translate(-50%, calc(-50% - 4px));
       box-shadow: 0 24px 45px rgba(43, 27, 12, 0.22);
     }
 
@@ -1722,16 +1723,12 @@
       }
 
       .genealogy {
-        min-height: auto;
-        align-items: start;
-        overflow: visible;
-        padding-top: calc(3.2rem + var(--safe-top));
-        padding-bottom: calc(3.8rem + var(--safe-bottom));
-      }
-
-      .genealogy .chapter-inner {
-        width: 100%;
-        max-width: 100%;
+        min-height: 100svh;
+        min-height: 100dvh;
+        align-items: center;
+        overflow: hidden;
+        padding-top: calc(3.4rem + var(--safe-top));
+        padding-bottom: calc(3.6rem + var(--safe-bottom));
       }
 
       .genealogy .chapter-title {
@@ -1747,26 +1744,29 @@
       }
 
       .genealogy .tarot-row {
-        grid-auto-flow: row;
-        grid-auto-columns: initial;
-        grid-template-columns: 1fr;
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(15.5rem, calc(100vw - 3.2rem));
         gap: 1rem;
-        overflow: visible;
-        padding: 1.25rem 0 0;
-        scroll-snap-type: none;
+        margin-inline: calc(var(--section-pad-x) * -1);
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 1.15rem var(--section-pad-x) 1rem;
+        scroll-padding-inline: var(--section-pad-x);
+        scroll-snap-type: x mandatory;
         scrollbar-width: none;
-      }
-
-      .genealogy .tarot-row::-webkit-scrollbar {
-        display: none;
+        -webkit-overflow-scrolling: touch;
       }
 
       .genealogy .tarot-card {
-        width: 100%;
-        min-height: auto;
+        min-height: 30rem;
         padding: 1rem;
-        scroll-snap-align: none;
+        scroll-snap-align: start;
         transform-style: flat;
+        opacity: 1;
+        filter: none;
+        transform: none;
+        transition-property: opacity, transform, border-color;
       }
 
       .genealogy .tarot-card::after {
@@ -1774,14 +1774,40 @@
       }
 
       .genealogy .tarot-figure {
-        aspect-ratio: 3 / 4;
-        max-height: 24rem;
+        aspect-ratio: 2 / 3;
+        max-height: 18rem;
       }
 
       .genealogy .tarot-card p {
         font-size: 0.9rem;
         line-height: 1.72;
       }
+
+      .genealogy.is-visible .tarot-card,
+      .genealogy .tarot-card.is-visible {
+        opacity: 1;
+        filter: none;
+        transform: none;
+      }
+
+      .genealogy .reveal {
+        opacity: 1;
+        filter: none;
+        transform: none;
+      }
+
+      .genealogy .tarot-row {
+        min-height: 32rem;
+      }
+
+      .family-node:nth-of-type(1) { left: 54% !important; top: 19.5% !important; }
+      .family-node:nth-of-type(2) { left: 53% !important; top: 38.5% !important; }
+      .family-node:nth-of-type(3) { left: 12% !important; top: 30.5% !important; }
+      .family-node:nth-of-type(4) { left: 81% !important; top: 29% !important; }
+      .family-node:nth-of-type(5) { left: 96% !important; top: 50% !important; }
+      .family-node:nth-of-type(6) { left: 28% !important; top: 57.5% !important; }
+      .family-node:nth-of-type(7) { left: 53% !important; top: 57% !important; }
+      .family-node:nth-of-type(8) { left: 86% !important; top: 72% !important; }
 
       .war-number {
         position: absolute;
@@ -2054,14 +2080,14 @@
               <path class="draw-line" d="M390 280v85M390 365H270M390 365H515M535 280v84M535 364H650" stroke="#1e3225" stroke-width="3" fill="none"/>
               <path class="draw-line" d="M650 414c60 30 70 56 40 82" stroke="#6b1d2f" stroke-width="3" fill="none"/>
             </svg>
-            <button class="family-node" style="left:18%;top:18%" data-note="狂想 / 磁铁 / 栗子树 / 创世者"><strong>何塞·阿尔卡蒂奥</strong><span>创世者</span></button>
-            <button class="family-node" style="left:41%;top:16%" data-note="糖果 / 盲眼 / 秩序 / 女族长"><strong>乌尔苏拉</strong><span>家族支柱</span></button>
-            <button class="family-node" style="left:28%;top:39%" data-note="肉身 / 出走 / 归来 / 枪声"><strong>何塞·阿尔卡蒂奥</strong><span>重复的冲动</span></button>
-            <button class="family-node" style="left:50%;top:42%" data-note="战争 / 预感 / 金鱼 / 虚无"><strong>奥雷里亚诺</strong><span>上校</span></button>
-            <button class="family-node" style="left:66%;top:37%" data-note="等待 / 禁忌 / 雨 / 家屋"><strong>阿玛兰妲</strong><span>漫长拒绝</span></button>
-            <button class="family-node" style="left:36%;top:67%" data-note="美貌 / 飞升 / 无辜 / 旁观"><strong>蕾梅黛丝</strong><span>美人</span></button>
-            <button class="family-node" style="left:59%;top:68%" data-note="香蕉 / 电报 / 广场 / 遗忘"><strong>何塞·阿尔卡蒂奥第二</strong><span>见证者</span></button>
-            <button class="family-node" style="left:76%;top:75%" data-note="破译 / 羊皮纸 / 飓风 / 终点"><strong>奥雷里亚诺</strong><span>最后读者</span></button>
+            <button class="family-node" style="left:51.5%;top:19.5%" data-note="狂想 / 磁铁 / 栗子树 / 创世者"><strong>何塞·阿尔卡蒂奥</strong><span>创世者</span></button>
+            <button class="family-node" style="left:51%;top:38.5%" data-note="糖果 / 盲眼 / 秩序 / 女族长"><strong>乌尔苏拉</strong><span>家族支柱</span></button>
+            <button class="family-node" style="left:36%;top:30.5%" data-note="肉身 / 出走 / 归来 / 枪声"><strong>何塞·阿尔卡蒂奥</strong><span>重复的冲动</span></button>
+            <button class="family-node" style="left:61.5%;top:29%" data-note="战争 / 预感 / 金鱼 / 虚无"><strong>奥雷里亚诺</strong><span>上校</span></button>
+            <button class="family-node" style="left:68%;top:50%" data-note="等待 / 禁忌 / 雨 / 家屋"><strong>阿玛兰妲</strong><span>漫长拒绝</span></button>
+            <button class="family-node" style="left:42%;top:57.5%" data-note="美貌 / 飞升 / 无辜 / 旁观"><strong>蕾梅黛丝</strong><span>美人</span></button>
+            <button class="family-node" style="left:51%;top:57%" data-note="香蕉 / 电报 / 广场 / 遗忘"><strong>何塞·阿尔卡蒂奥第二</strong><span>见证者</span></button>
+            <button class="family-node" style="left:63%;top:72%" data-note="破译 / 羊皮纸 / 飓风 / 终点"><strong>奥雷里亚诺</strong><span>最后读者</span></button>
           </div>
         </div>
       </div>
@@ -2453,6 +2479,12 @@
     setupScrollEffects();
     setupPointerEffects();
     setupFamilyTips();
+
+    if (window.location.hash) {
+      window.setTimeout(() => {
+        document.querySelector(window.location.hash)?.scrollIntoView({ block: "start" });
+      }, 120);
+    }
   </script>
 </body>
 </html>
