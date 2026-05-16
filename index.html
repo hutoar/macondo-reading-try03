@@ -1,0 +1,2396 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#1e3225" />
+  <title>百年孤独 | 数字版马孔多</title>
+  <style>
+    /*
+      数字版马孔多 - 单文件艺术工程档案
+      ------------------------------------------------------------
+      设计策略：
+      1. 不依赖 npm、不依赖大型动效库，所有视觉都由 HTML / CSS / Vanilla JS 完成。
+      2. 使用 CSS 自定义属性组织颜色、间距、纹理和动效参数，便于响应式断点统一调度。
+      3. 全局纹理层负责羊皮纸、旧电影颗粒、暗角与魔幻粒子；章节内部只处理叙事内容。
+      4. 所有持续动画优先使用 transform / opacity，并通过 will-change 提示浏览器走 GPU 合成层。
+    */
+
+    :root {
+      --parchment: #e6d5b8;
+      --parchment-deep: #c9b082;
+      --ink: #20170f;
+      --ink-soft: rgba(32, 23, 15, 0.72);
+      --night: #0f1626;
+      --jungle: #1e3225;
+      --jungle-soft: #314d37;
+      --blood: #6b1d2f;
+      --copper: #c5a059;
+      --gold: #e6c875;
+      --smoke: rgba(15, 22, 38, 0.72);
+      --paper-card: rgba(230, 213, 184, 0.72);
+      --paper-line: rgba(107, 29, 47, 0.28);
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --section-pad-x: clamp(1.1rem, 4.6vw, 6rem);
+      --section-pad-y: clamp(4.5rem, 9vw, 7rem);
+      --content-max: 1180px;
+      --font-serif: "Noto Serif SC", "Songti SC", "STSong", "SimSun", Georgia, serif;
+      --font-sans: "Inter", "Helvetica Neue", Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      color-scheme: dark;
+      scroll-behavior: smooth;
+      background: var(--night);
+    }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 18% 8%, rgba(197, 160, 89, 0.26), transparent 28rem),
+        radial-gradient(circle at 82% 18%, rgba(107, 29, 47, 0.28), transparent 30rem),
+        linear-gradient(135deg, #110d0a 0%, #23170f 14%, var(--parchment) 34%, #d9c190 72%, #1d1611 100%);
+      font-family: var(--font-serif);
+      line-height: 1.75;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      /*
+        羊皮纸纹理：
+        多层 radial-gradient 模拟纸张纤维、霉斑、烧灼边缘。它是全局底色，
+        章节再通过 mix-blend-mode 与半透明色块叠加，产生旧胶片和手稿的复合质感。
+      */
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -5;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 12% 15%, rgba(58, 43, 27, 0.35), transparent 13rem),
+        radial-gradient(circle at 88% 10%, rgba(107, 29, 47, 0.25), transparent 18rem),
+        radial-gradient(circle at 22% 86%, rgba(30, 50, 37, 0.28), transparent 18rem),
+        radial-gradient(circle at 80% 78%, rgba(11, 9, 8, 0.42), transparent 22rem),
+        linear-gradient(90deg, rgba(22, 16, 11, 0.35), transparent 14%, transparent 86%, rgba(22, 16, 11, 0.38));
+      mix-blend-mode: multiply;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    svg {
+      max-width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    ::selection {
+      color: #fff7df;
+      background: var(--blood);
+    }
+
+    .noise-layer,
+    .vignette-layer,
+    .butterfly-field,
+    .scroll-progress,
+    .chapter-rail,
+    .cursor-flare {
+      position: fixed;
+      pointer-events: none;
+    }
+
+    .noise-layer {
+      /*
+        SVG Noise Base64 的轻量替代：
+        用多层极小 repeating-radial-gradient 制造颗粒，不需要图片请求。
+        mix-blend-mode: overlay 让噪点吃进底色，避免像贴在屏幕上的灰色蒙版。
+      */
+      inset: 0;
+      z-index: 60;
+      opacity: 0.18;
+      background-image:
+        repeating-radial-gradient(circle at 20% 30%, rgba(255,255,255,0.9) 0 1px, transparent 1px 4px),
+        repeating-radial-gradient(circle at 70% 80%, rgba(0,0,0,0.55) 0 1px, transparent 1px 5px);
+      background-size: 170px 170px, 230px 230px;
+      mix-blend-mode: overlay;
+    }
+
+    .vignette-layer {
+      inset: 0;
+      z-index: 59;
+      background:
+        radial-gradient(circle at 50% 42%, transparent 0 48%, rgba(10, 7, 4, 0.42) 78%, rgba(4, 3, 2, 0.78) 100%),
+        linear-gradient(180deg, rgba(15, 22, 38, 0.22), transparent 18%, transparent 82%, rgba(15, 22, 38, 0.28));
+      mix-blend-mode: multiply;
+    }
+
+    .butterfly-field {
+      inset: 0;
+      z-index: 35;
+      overflow: hidden;
+    }
+
+    .cursor-flare {
+      width: 18rem;
+      height: 18rem;
+      left: 0;
+      top: 0;
+      z-index: 34;
+      opacity: 0;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(230, 200, 117, 0.24), transparent 62%);
+      transform: translate3d(-50%, -50%, 0);
+      will-change: transform, opacity;
+      transition: opacity 260ms ease;
+      mix-blend-mode: screen;
+    }
+
+    .scroll-progress {
+      top: 0;
+      left: 0;
+      z-index: 80;
+      width: var(--progress, 0%);
+      height: 2px;
+      background: linear-gradient(90deg, var(--blood), var(--copper), #f5df9c);
+      box-shadow: 0 0 18px rgba(197, 160, 89, 0.65);
+    }
+
+    .chapter-rail {
+      right: clamp(0.7rem, 2vw, 1.4rem);
+      top: 50%;
+      z-index: 75;
+      display: none;
+      transform: translateY(-50%);
+    }
+
+    .chapter-rail nav {
+      display: grid;
+      gap: 0.65rem;
+    }
+
+    .chapter-rail a {
+      width: 0.56rem;
+      height: 0.56rem;
+      border: 1px solid rgba(230, 213, 184, 0.56);
+      border-radius: 999px;
+      background: rgba(15, 22, 38, 0.35);
+      box-shadow: 0 0 0 4px rgba(15, 22, 38, 0.12);
+      pointer-events: auto;
+      transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
+    }
+
+    .chapter-rail a.is-active {
+      background: var(--copper);
+      border-color: #fff1bd;
+      transform: scale(1.65);
+    }
+
+    .site {
+      position: relative;
+      z-index: 1;
+    }
+
+    .chapter {
+      position: relative;
+      min-height: 100svh;
+      min-height: 100dvh;
+      padding: calc(var(--section-pad-y) + var(--safe-top)) var(--section-pad-x) calc(var(--section-pad-y) + var(--safe-bottom));
+      isolation: isolate;
+      display: grid;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    .chapter::before,
+    .chapter::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -2;
+      pointer-events: none;
+    }
+
+    .chapter::before {
+      opacity: 0.76;
+      background:
+        linear-gradient(180deg, rgba(15, 22, 38, 0.12), transparent 28%, transparent 70%, rgba(15, 22, 38, 0.22)),
+        radial-gradient(circle at var(--glow-x, 50%) var(--glow-y, 40%), rgba(197, 160, 89, 0.2), transparent 28rem);
+    }
+
+    .chapter::after {
+      inset: auto 0 0;
+      height: 10rem;
+      opacity: 0.58;
+      background: linear-gradient(180deg, transparent, rgba(17, 12, 8, 0.36));
+      mix-blend-mode: multiply;
+    }
+
+    .chapter-inner {
+      width: min(100%, var(--content-max));
+      margin-inline: auto;
+      position: relative;
+      z-index: 2;
+    }
+
+    .chapter-grid {
+      display: grid;
+      gap: clamp(1.7rem, 4vw, 4.5rem);
+      align-items: center;
+    }
+
+    .eyebrow {
+      margin: 0 0 0.9rem;
+      font-family: var(--font-sans);
+      font-size: 0.68rem;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: var(--blood);
+      font-weight: 700;
+    }
+
+    .chapter-title {
+      margin: 0;
+      font-size: clamp(2.45rem, 9vw, 6.8rem);
+      line-height: 0.94;
+      letter-spacing: 0.13em;
+      color: var(--ink);
+      text-wrap: balance;
+    }
+
+    .chapter-kicker {
+      margin: 1rem 0 0;
+      max-width: 43rem;
+      color: var(--ink-soft);
+      font-size: clamp(1rem, 2.1vw, 1.18rem);
+    }
+
+    .copy {
+      margin: 0;
+      color: rgba(32, 23, 15, 0.82);
+      font-size: clamp(0.96rem, 1.7vw, 1.08rem);
+    }
+
+    .copy + .copy {
+      margin-top: 0.95rem;
+    }
+
+    .dark {
+      color: #f2dfb9;
+      background:
+        radial-gradient(circle at 12% 20%, rgba(107, 29, 47, 0.34), transparent 22rem),
+        radial-gradient(circle at 84% 78%, rgba(197, 160, 89, 0.2), transparent 24rem),
+        linear-gradient(135deg, #0a0e18 0%, #111827 42%, #241019 100%);
+    }
+
+    .dark .chapter-title,
+    .dark .copy {
+      color: #f3dfb7;
+    }
+
+    .dark .chapter-kicker {
+      color: rgba(243, 223, 183, 0.76);
+    }
+
+    .dark .eyebrow {
+      color: #d2ac61;
+    }
+
+    .paper-panel {
+      position: relative;
+      border: 1px solid rgba(80, 49, 24, 0.2);
+      border-radius: 8px;
+      padding: clamp(1.1rem, 3vw, 2rem);
+      background:
+        linear-gradient(135deg, rgba(255, 240, 202, 0.68), rgba(199, 172, 124, 0.34)),
+        radial-gradient(circle at 20% 10%, rgba(255, 255, 255, 0.36), transparent 12rem);
+      box-shadow:
+        0 24px 70px rgba(31, 20, 12, 0.25),
+        inset 0 0 0 1px rgba(255, 245, 210, 0.22);
+      backdrop-filter: blur(10px);
+    }
+
+    .dark .paper-panel {
+      border-color: rgba(230, 213, 184, 0.18);
+      color: #f4dfb8;
+      background:
+        linear-gradient(135deg, rgba(31, 24, 20, 0.78), rgba(15, 22, 38, 0.62)),
+        radial-gradient(circle at 15% 12%, rgba(197, 160, 89, 0.18), transparent 13rem);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
+    }
+
+    .dark .paper-panel .copy,
+    .dark .paper-panel p {
+      color: rgba(244, 223, 184, 0.82);
+    }
+
+    .reveal {
+      opacity: 0;
+      filter: blur(18px);
+      transform: translate3d(0, 2rem, 0);
+      transition:
+        opacity 900ms ease,
+        filter 900ms ease,
+        transform 900ms cubic-bezier(.2, .72, .18, 1);
+      transition-delay: var(--delay, 0ms);
+      will-change: transform, opacity, filter;
+    }
+
+    .is-visible .reveal,
+    .reveal.is-visible {
+      opacity: 1;
+      filter: blur(0);
+      transform: translate3d(0, 0, 0);
+    }
+
+    .section-number {
+      position: absolute;
+      right: clamp(1rem, 5vw, 5rem);
+      top: clamp(3.8rem, 8vw, 6rem);
+      z-index: 1;
+      font-family: Georgia, serif;
+      font-size: clamp(5rem, 18vw, 18rem);
+      line-height: 1;
+      color: rgba(107, 29, 47, 0.08);
+      letter-spacing: 0.02em;
+      user-select: none;
+      pointer-events: none;
+    }
+
+    .dark .section-number {
+      color: rgba(230, 213, 184, 0.06);
+    }
+
+    /* 1. 首屏 */
+    .hero {
+      min-height: 100svh;
+      text-align: center;
+      place-items: center;
+      background:
+        radial-gradient(circle at 50% 43%, rgba(197, 160, 89, 0.18), transparent 22rem),
+        linear-gradient(160deg, #080b12 0%, #121826 52%, #2a1418 100%);
+    }
+
+    .sigil {
+      position: absolute;
+      inset: 50% auto auto 50%;
+      width: min(68vw, 35rem);
+      aspect-ratio: 1;
+      border-radius: 50%;
+      border: 1px solid rgba(197, 160, 89, 0.22);
+      transform: translate(-50%, -50%);
+      filter: blur(0.2px);
+      opacity: 0.62;
+      animation: sigil-drift 18s linear infinite;
+      will-change: transform;
+    }
+
+    .sigil::before,
+    .sigil::after {
+      content: "";
+      position: absolute;
+      inset: 13%;
+      border-radius: 50%;
+      border: 1px solid rgba(230, 200, 117, 0.22);
+    }
+
+    .sigil::before {
+      clip-path: polygon(50% 0, 100% 86%, 0 86%);
+    }
+
+    .sigil::after {
+      inset: 29%;
+      border-color: rgba(197, 160, 89, 0.4);
+      box-shadow:
+        0 0 0 1px rgba(107, 29, 47, 0.22),
+        0 0 48px rgba(197, 160, 89, 0.18);
+    }
+
+    .hero h1 {
+      margin: 0;
+      color: #f3dfb7;
+      font-size: clamp(3.5rem, 17vw, 12rem);
+      line-height: 0.92;
+      letter-spacing: clamp(0.08em, 1.6vw, 0.34em);
+      text-shadow:
+        0 0 28px rgba(197, 160, 89, 0.22),
+        0 24px 60px rgba(0, 0, 0, 0.58);
+    }
+
+    .hero-subtitle {
+      margin: 1rem auto 0;
+      color: rgba(243, 223, 183, 0.78);
+      font-family: var(--font-sans);
+      font-size: clamp(0.76rem, 1.7vw, 1.02rem);
+      letter-spacing: 0.36em;
+      text-transform: uppercase;
+    }
+
+    .type-quote {
+      min-height: 3.2rem;
+      margin: clamp(2.8rem, 8vw, 5rem) auto 0;
+      max-width: 44rem;
+      color: rgba(243, 223, 183, 0.72);
+      font-size: clamp(0.92rem, 2.2vw, 1.16rem);
+    }
+
+    .type-quote span {
+      display: inline-block;
+      opacity: 0;
+      transform: translate3d(0, 0.9rem, 0) rotate(-3deg);
+      filter: blur(8px);
+      transition: opacity 620ms ease, transform 720ms ease, filter 720ms ease;
+      transition-delay: calc(var(--i) * 38ms);
+      will-change: transform, opacity, filter;
+    }
+
+    .is-visible .type-quote span {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) rotate(0deg);
+      filter: blur(0);
+    }
+
+    .down-arrow {
+      position: absolute;
+      left: 50%;
+      bottom: calc(1.3rem + var(--safe-bottom));
+      width: 2.4rem;
+      height: 2.4rem;
+      border: 1px solid rgba(243, 223, 183, 0.28);
+      border-radius: 999px;
+      transform: translateX(-50%);
+      display: grid;
+      place-items: center;
+      color: rgba(243, 223, 183, 0.78);
+      animation: breathe 2.8s ease-in-out infinite;
+      pointer-events: auto;
+    }
+
+    .down-arrow::before {
+      content: "";
+      width: 0.62rem;
+      height: 0.62rem;
+      border-right: 1px solid currentColor;
+      border-bottom: 1px solid currentColor;
+      transform: rotate(45deg) translate(-1px, -1px);
+    }
+
+    /* 2. 炼金术 */
+    .alchemy {
+      --glow-x: 35%;
+      --glow-y: 26%;
+      background:
+        radial-gradient(circle at 78% 20%, rgba(197, 160, 89, 0.28), transparent 24rem),
+        linear-gradient(145deg, #dcc99d, #e8d8b9 42%, #b29362 100%);
+    }
+
+    .artifact-stage {
+      position: relative;
+      min-height: clamp(30rem, 58vw, 44rem);
+      border-radius: 8px;
+      border: 1px solid rgba(197, 160, 89, 0.34);
+      background: #120d08;
+      box-shadow:
+        0 30px 90px rgba(42, 25, 11, 0.35),
+        inset 0 0 0 1px rgba(255, 235, 186, 0.08);
+      overflow: hidden;
+      perspective: 900px;
+    }
+
+    .alchemy-image,
+    .map-image,
+    .family-image,
+    .war-image {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+      object-position: center;
+      will-change: transform, filter;
+    }
+
+    .image-patina {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 54% 44%, transparent 0 48%, rgba(8, 5, 3, 0.22) 74%, rgba(4, 3, 2, 0.7) 100%),
+        linear-gradient(180deg, rgba(197, 160, 89, 0.08), transparent 48%, rgba(8, 8, 12, 0.5));
+      mix-blend-mode: multiply;
+    }
+
+    .alchemy-image {
+      filter: saturate(0.98) contrast(1.03) brightness(0.94);
+      transform: scale(1.015);
+    }
+
+    .artifact-stage.is-visible .alchemy-image,
+    .is-visible .alchemy-image {
+      transform: scale(1.045);
+      transition: transform 2600ms cubic-bezier(.2, .72, .18, 1);
+    }
+
+    .scene-caption {
+      position: absolute;
+      left: clamp(1rem, 3vw, 2rem);
+      right: clamp(1rem, 3vw, 2rem);
+      bottom: clamp(1rem, 3vw, 2rem);
+      z-index: 5;
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 1rem;
+      color: rgba(245, 227, 191, 0.88);
+      pointer-events: none;
+    }
+
+    .scene-caption strong {
+      display: block;
+      font-size: clamp(1.05rem, 2.2vw, 1.45rem);
+      line-height: 1.2;
+      color: #f4d990;
+      letter-spacing: 0.08em;
+    }
+
+    .scene-caption span {
+      display: block;
+      max-width: 21rem;
+      margin-top: 0.35rem;
+      font-size: 0.78rem;
+      line-height: 1.7;
+      color: rgba(245, 227, 191, 0.72);
+    }
+
+    .scene-mark {
+      flex: 0 0 auto;
+      width: clamp(3.4rem, 8vw, 5.4rem);
+      aspect-ratio: 1;
+      border: 1px solid rgba(230, 200, 117, 0.44);
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      font-family: Georgia, serif;
+      color: rgba(230, 200, 117, 0.78);
+      background: rgba(14, 10, 8, 0.22);
+      backdrop-filter: blur(8px);
+    }
+
+    .artifact {
+      position: absolute;
+      left: var(--ax);
+      top: var(--ay);
+      width: clamp(5.6rem, 14vw, 9.3rem);
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(62, 43, 22, 0.28);
+      border-radius: 8px;
+      background: rgba(244, 222, 178, 0.48);
+      box-shadow: 0 22px 48px rgba(50, 31, 16, 0.22);
+      transform: rotate(var(--ar));
+      transition: transform 420ms ease, filter 420ms ease;
+      will-change: transform;
+      z-index: 4;
+      opacity: 0.72;
+      display: none;
+    }
+
+    .artifact:hover,
+    .artifact:focus-visible {
+      transform: translate3d(0, -0.45rem, 2rem) rotate(var(--ar)) scale(1.04);
+      filter: saturate(1.16) brightness(1.08);
+    }
+
+    .artifact svg {
+      width: 66%;
+      color: var(--blood);
+      filter: drop-shadow(0 10px 16px rgba(55, 35, 12, 0.18));
+    }
+
+    .artifact small {
+      position: absolute;
+      left: 0.8rem;
+      bottom: 0.55rem;
+      font-family: var(--font-sans);
+      font-size: 0.62rem;
+      letter-spacing: 0.16em;
+      color: rgba(32, 23, 15, 0.62);
+    }
+
+    .iron-field {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 3;
+      opacity: 0.38;
+    }
+
+    .iron-dot {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: rgba(41, 28, 19, 0.6);
+      transform: translate3d(var(--sx), var(--sy), 0);
+      transition: transform 1200ms cubic-bezier(.2, .8, .2, 1), opacity 800ms ease;
+      opacity: 0.4;
+      will-change: transform, opacity;
+    }
+
+    .alchemy.is-visible .iron-dot {
+      opacity: 0.9;
+      transform: rotate(var(--angle)) translate3d(var(--ring), 0, 0);
+    }
+
+    /* 3. 地图 */
+    .map-wrap {
+      position: relative;
+      padding: 0;
+      border: 1px solid rgba(197, 160, 89, 0.28);
+      border-radius: 8px;
+      background: #120d08;
+      box-shadow:
+        0 30px 90px rgba(42, 25, 11, 0.32),
+        inset 0 0 0 1px rgba(255, 235, 186, 0.08);
+      overflow: hidden;
+      min-height: clamp(22rem, 48vw, 38rem);
+    }
+
+    .map-image {
+      filter: saturate(0.98) contrast(1.02) brightness(0.92);
+      transform: scale(1.01);
+    }
+
+    .map-wrap .image-patina {
+      background:
+        radial-gradient(circle at 54% 46%, transparent 0 58%, rgba(12, 8, 5, 0.28) 85%, rgba(4, 3, 2, 0.72) 100%),
+        linear-gradient(90deg, rgba(11, 8, 5, 0.22), transparent 18%, transparent 82%, rgba(11, 8, 5, 0.26));
+    }
+
+    .map-svg .draw-line,
+    .family-svg .draw-line {
+      stroke-dasharray: 900;
+      stroke-dashoffset: 900;
+      transition: stroke-dashoffset 1800ms cubic-bezier(.28, .76, .22, 1);
+    }
+
+    .is-visible .map-svg .draw-line,
+    .is-visible .family-svg .draw-line {
+      stroke-dashoffset: 0;
+    }
+
+    .map-note {
+      position: absolute;
+      z-index: 4;
+      max-width: 9.4rem;
+      padding: 0.52rem 0.62rem;
+      border: 1px solid rgba(230, 200, 117, 0.3);
+      border-left: 2px solid rgba(197, 160, 89, 0.82);
+      background: rgba(14, 10, 8, 0.5);
+      font-size: 0.66rem;
+      line-height: 1.55;
+      color: rgba(245, 227, 191, 0.78);
+      box-shadow: 0 14px 30px rgba(0, 0, 0, 0.18);
+      backdrop-filter: blur(8px);
+    }
+
+    .map-svg {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      width: 100%;
+      height: 100%;
+      opacity: 0.08;
+      mix-blend-mode: screen;
+      pointer-events: none;
+    }
+
+    .map-note.one { left: 5%; top: 8%; }
+    .map-note.two { right: 5%; top: 12%; }
+    .map-note.three { left: 5%; top: 27%; }
+
+    /* 4. 时间线 */
+    .timeline {
+      position: relative;
+      display: grid;
+      gap: 1.35rem;
+      padding-left: 1.1rem;
+    }
+
+    .timeline::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.5rem;
+      bottom: 0.5rem;
+      width: 1px;
+      background: linear-gradient(var(--blood), var(--copper), rgba(30, 50, 37, 0.45));
+      transform-origin: top;
+      transform: scaleY(0);
+      transition: transform 1300ms ease;
+    }
+
+    .is-visible .timeline::before {
+      transform: scaleY(1);
+    }
+
+    .timeline-card {
+      position: relative;
+      padding: 1.05rem 1rem;
+      border: 1px solid rgba(107, 29, 47, 0.22);
+      border-radius: 8px;
+      background: rgba(241, 222, 186, 0.58);
+      box-shadow: 0 18px 50px rgba(56, 36, 18, 0.16);
+    }
+
+    .timeline-card::before {
+      content: "";
+      position: absolute;
+      left: -1.43rem;
+      top: 1.2rem;
+      width: 0.7rem;
+      height: 0.7rem;
+      border-radius: 50%;
+      background: var(--blood);
+      box-shadow: 0 0 0 5px rgba(107, 29, 47, 0.12);
+    }
+
+    .timeline-card h3,
+    .symbol-card h3,
+    .tarot-card h3 {
+      margin: 0 0 0.5rem;
+      line-height: 1.2;
+      color: var(--blood);
+      font-size: clamp(1.1rem, 2vw, 1.34rem);
+    }
+
+    .timeline-card p,
+    .symbol-card p,
+    .war-paper p,
+    .rain-text p {
+      margin: 0;
+      color: rgba(32, 23, 15, 0.75);
+      font-size: 0.95rem;
+    }
+
+    /* 5. 人物卡 */
+    .genealogy {
+      background:
+        radial-gradient(circle at 84% 12%, rgba(197, 160, 89, 0.18), transparent 23rem),
+        linear-gradient(135deg, #111827 0%, #22131a 100%);
+    }
+
+    .tarot-row {
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(16rem, 78vw);
+      gap: 1rem;
+      align-items: stretch;
+      overflow-x: auto;
+      padding: 0.6rem 0 1.2rem;
+      scroll-snap-type: x mandatory;
+      scrollbar-width: thin;
+    }
+
+    .tarot-card {
+      position: relative;
+      min-height: 34rem;
+      padding: 1.25rem;
+      border-radius: 8px;
+      border: 1px solid rgba(230, 213, 184, 0.25);
+      background:
+        linear-gradient(145deg, rgba(226, 205, 165, 0.12), rgba(107, 29, 47, 0.2)),
+        radial-gradient(circle at 50% 18%, rgba(197, 160, 89, 0.22), transparent 11rem);
+      scroll-snap-align: center;
+      box-shadow: 0 28px 70px rgba(0, 0, 0, 0.28);
+      transform-style: preserve-3d;
+      transition: transform 200ms ease, border-color 200ms ease;
+      will-change: transform;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .tarot-card::before {
+      content: "";
+      position: absolute;
+      inset: 0.6rem;
+      border: 1px solid rgba(197, 160, 89, 0.28);
+      border-radius: 6px;
+      pointer-events: none;
+      z-index: 3;
+    }
+
+    .tarot-card::after {
+      content: attr(data-mark);
+      position: absolute;
+      right: 1.2rem;
+      bottom: 0.8rem;
+      color: rgba(230, 213, 184, 0.08);
+      font-size: 7rem;
+      line-height: 1;
+      font-family: Georgia, serif;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .tarot-card > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .tarot-figure {
+      width: 100%;
+      aspect-ratio: 2 / 3;
+      margin-bottom: 1rem;
+      border-radius: 7px;
+      border: 1px solid rgba(197, 160, 89, 0.2);
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at 50% 32%, rgba(230, 200, 117, 0.18), transparent 7rem),
+        linear-gradient(135deg, rgba(15, 22, 38, 0.54), rgba(107, 29, 47, 0.24));
+      overflow: hidden;
+      box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.24);
+    }
+
+    .tarot-figure::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(180deg, transparent 54%, rgba(15, 22, 38, 0.56)),
+        radial-gradient(circle at 50% 16%, rgba(230, 200, 117, 0.16), transparent 42%),
+        linear-gradient(90deg, rgba(15, 22, 38, 0.34), transparent 20%, transparent 80%, rgba(15, 22, 38, 0.34));
+      mix-blend-mode: multiply;
+      pointer-events: none;
+    }
+
+    .tarot-figure img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+      object-position: center top;
+      filter: sepia(0.16) saturate(0.92) contrast(1.05) brightness(0.92);
+      transform: scale(1.015);
+      transition: transform 520ms ease, filter 520ms ease;
+      will-change: transform, filter;
+    }
+
+    .tarot-card:hover .tarot-figure img,
+    .tarot-card:focus-within .tarot-figure img {
+      transform: scale(1.055);
+      filter: sepia(0.1) saturate(1.03) contrast(1.08) brightness(0.98);
+    }
+
+    .tarot-card p {
+      position: relative;
+      z-index: 1;
+      margin: 0;
+      color: rgba(243, 223, 183, 0.78);
+      font-size: 0.95rem;
+      flex: 1;
+    }
+
+    .tarot-card h3 {
+      color: #f0d78c;
+    }
+
+    .tarot-card small {
+      display: block;
+      margin-bottom: 0.45rem;
+      color: rgba(230, 213, 184, 0.5);
+      font-family: var(--font-sans);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    /* 6. 家族树 */
+    .family-board {
+      position: relative;
+      overflow: hidden;
+      border-radius: 8px;
+      border: 1px solid rgba(197, 160, 89, 0.28);
+      background: #120d08;
+      box-shadow:
+        0 30px 90px rgba(42, 25, 11, 0.32),
+        inset 0 0 0 1px rgba(255, 235, 186, 0.08);
+      min-height: clamp(27rem, 46vw, 38rem);
+    }
+
+    .family-image {
+      position: absolute;
+      min-width: 0;
+      height: 100%;
+      filter: saturate(0.96) contrast(1.04) brightness(0.9);
+      transform: scale(1.01);
+      pointer-events: none;
+    }
+
+    .family-board .image-patina {
+      position: absolute;
+      min-width: 0;
+      height: auto;
+      margin-top: 0;
+      background:
+        radial-gradient(circle at 55% 50%, transparent 0 54%, rgba(16, 11, 7, 0.26) 82%, rgba(5, 4, 3, 0.7) 100%),
+        linear-gradient(180deg, rgba(230, 213, 184, 0.05), rgba(15, 22, 38, 0.28));
+    }
+
+    .family-canvas {
+      position: relative;
+      min-width: 0;
+      width: 100%;
+      height: clamp(27rem, 46vw, 38rem);
+      z-index: 3;
+      margin-top: 0;
+    }
+
+    .family-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0.06;
+      mix-blend-mode: screen;
+    }
+
+    .family-node {
+      position: absolute;
+      width: 0.86rem;
+      min-height: 0;
+      height: 0.86rem;
+      border: 1px solid rgba(255, 239, 190, 0.8);
+      border-radius: 999px;
+      background: rgba(197, 160, 89, 0.85);
+      color: transparent;
+      box-shadow:
+        0 0 0 5px rgba(197, 160, 89, 0.12),
+        0 0 22px rgba(197, 160, 89, 0.42);
+      cursor: pointer;
+      pointer-events: auto;
+      padding: 0;
+      text-align: left;
+      transition: transform 180ms ease, box-shadow 180ms ease;
+    }
+
+    .family-node:hover,
+    .family-node:focus-visible {
+      transform: translateY(-4px);
+      box-shadow: 0 24px 45px rgba(43, 27, 12, 0.22);
+    }
+
+    .family-node strong {
+      position: absolute;
+      left: 50%;
+      top: calc(100% + 0.52rem);
+      transform: translateX(-50%);
+      display: block;
+      width: max-content;
+      max-width: 8rem;
+      padding: 0.24rem 0.44rem;
+      border-radius: 999px;
+      background: rgba(10, 8, 7, 0.48);
+      color: rgba(245, 227, 191, 0.8);
+      font-size: 0.66rem;
+      line-height: 1.15;
+      font-family: var(--font-sans);
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      backdrop-filter: blur(8px);
+    }
+
+    .family-node span {
+      display: none;
+    }
+
+    .family-tip {
+      position: fixed;
+      z-index: 95;
+      width: min(17rem, calc(100vw - 2rem));
+      padding: 0.85rem 1rem;
+      border: 1px solid rgba(230, 213, 184, 0.32);
+      border-radius: 8px;
+      color: #f5e3bf;
+      background: rgba(15, 22, 38, 0.94);
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.36);
+      transform: translate3d(-50%, -100%, 0);
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 180ms ease, visibility 180ms ease;
+    }
+
+    .family-tip.is-open {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .family-tip button {
+      float: right;
+      margin: -0.2rem -0.25rem 0 0.5rem;
+      width: 1.7rem;
+      height: 1.7rem;
+      border: 0;
+      border-radius: 999px;
+      color: #f5e3bf;
+      background: rgba(255, 255, 255, 0.08);
+      cursor: pointer;
+    }
+
+    /* 7. 战争 */
+    .war {
+      background:
+        radial-gradient(circle at 82% 15%, rgba(107, 29, 47, 0.42), transparent 23rem),
+        radial-gradient(circle at 18% 84%, rgba(197, 160, 89, 0.14), transparent 22rem),
+        linear-gradient(145deg, #0b101b 0%, #1f0d15 64%, #130d0d 100%);
+    }
+
+    .war-collage {
+      position: relative;
+      min-height: clamp(31rem, 56vw, 44rem);
+      overflow: hidden;
+      border-radius: 8px;
+      border: 1px solid rgba(197, 160, 89, 0.28);
+      background: rgba(12, 9, 10, 0.52);
+      box-shadow:
+        0 30px 90px rgba(0, 0, 0, 0.38),
+        inset 0 -80px 120px rgba(0, 0, 0, 0.42);
+    }
+
+    .war-image {
+      filter: saturate(0.96) contrast(1.06) brightness(0.92);
+      transform: scale(1.015);
+    }
+
+    .war-collage .image-patina {
+      background:
+        radial-gradient(circle at 52% 45%, transparent 0 52%, rgba(5, 4, 4, 0.26) 78%, rgba(0, 0, 0, 0.78) 100%),
+        linear-gradient(180deg, rgba(107, 29, 47, 0.08), transparent 50%, rgba(4, 6, 9, 0.54));
+    }
+
+    .war-number {
+      position: absolute;
+      inset: 0 auto auto 0;
+      color: rgba(230, 213, 184, 0.08);
+      font-size: clamp(9rem, 28vw, 24rem);
+      line-height: 0.8;
+      font-family: Georgia, serif;
+      letter-spacing: 0;
+      transform: translate3d(-3%, 8%, 0);
+      z-index: 2;
+      opacity: 0.58;
+    }
+
+    .war-paper {
+      position: absolute;
+      width: min(13.5rem, 62vw);
+      padding: 0.68rem 0.78rem;
+      border: 1px solid rgba(230, 213, 184, 0.22);
+      border-radius: 6px;
+      background: rgba(14, 10, 8, 0.5);
+      color: #f5e3bf;
+      box-shadow: 0 22px 70px rgba(0, 0, 0, 0.24);
+      backdrop-filter: blur(8px);
+      transform: rotate(var(--rot)) translate3d(0, var(--float, 0), 0);
+      will-change: transform;
+      z-index: 4;
+    }
+
+    .war-paper h3 {
+      margin: 0 0 0.32rem;
+      color: #f4d990;
+      font-size: 0.84rem;
+    }
+
+    .war-paper p {
+      color: rgba(245, 227, 191, 0.72);
+      font-size: 0.74rem;
+      line-height: 1.55;
+    }
+
+    .war-paper.one { left: 5%; top: 7%; --rot: -2deg; }
+    .war-paper.two { right: 6%; top: 12%; --rot: 2deg; }
+    .war-paper.three { left: 5%; top: 31%; --rot: -1deg; }
+
+    .goldfish-ring {
+      position: absolute;
+      right: 9%;
+      bottom: 0;
+      width: clamp(11rem, 28vw, 18rem);
+      aspect-ratio: 1;
+      border-radius: 50%;
+      border: 1px solid rgba(197, 160, 89, 0.22);
+      animation: ring-spin 22s linear infinite reverse;
+      transform-origin: 50% 50%;
+      z-index: 3;
+      opacity: 0.42;
+    }
+
+    .goldfish-ring span {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 1.8rem;
+      height: 0.72rem;
+      border-radius: 60% 40% 40% 60%;
+      background: linear-gradient(90deg, #c5973f, #f0d07a);
+      transform: rotate(calc(var(--i) * 24deg)) translateX(7rem);
+      transform-origin: 0 0;
+      box-shadow: 0 0 16px rgba(197, 160, 89, 0.24);
+    }
+
+    /* 8. 雨 */
+    .rain {
+      background:
+        radial-gradient(circle at 20% 10%, rgba(230, 200, 117, 0.18), transparent 19rem),
+        linear-gradient(180deg, #314d37 0%, #1f3a2a 40%, #132017 100%);
+    }
+
+    .rain-stage {
+      position: relative;
+      min-height: 33rem;
+      overflow: hidden;
+      border: 1px solid rgba(230, 213, 184, 0.15);
+      border-radius: 8px;
+      background:
+        linear-gradient(180deg, rgba(197, 160, 89, 0.22), transparent 32%),
+        radial-gradient(circle at 58% 56%, rgba(12, 20, 16, 0.52), transparent 18rem);
+      box-shadow: inset 0 -80px 120px rgba(10, 14, 12, 0.55);
+    }
+
+    .rain-image {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+      filter: saturate(0.88) contrast(1.08) brightness(0.82);
+      transform: scale(1.02);
+      will-change: transform, filter;
+    }
+
+    .rain-stage.is-visible .rain-image,
+    .is-visible .rain-image {
+      transform: scale(1.06);
+      transition: transform 2600ms cubic-bezier(.2, .72, .18, 1);
+    }
+
+    .rain-decay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(180deg, rgba(197, 160, 89, 0.16), transparent 24%, rgba(8, 13, 10, 0.72) 100%),
+        radial-gradient(circle at 52% 48%, transparent 0 38%, rgba(12, 18, 14, 0.55) 78%, rgba(5, 8, 7, 0.86) 100%),
+        repeating-linear-gradient(92deg, rgba(230, 213, 184, 0.08) 0 1px, transparent 1px 36px);
+      mix-blend-mode: multiply;
+      z-index: 1;
+    }
+
+    .rain-sheets,
+    .rain-streaks,
+    .rain-ripples {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .rain-sheets {
+      z-index: 3;
+      mix-blend-mode: screen;
+    }
+
+    .rain-streaks {
+      z-index: 4;
+      opacity: 0.78;
+      filter: blur(0.15px);
+    }
+
+    .rain-ripples {
+      z-index: 2;
+      inset: auto 0 0;
+      height: 34%;
+      background: linear-gradient(180deg, transparent, rgba(6, 10, 8, 0.36));
+      mix-blend-mode: screen;
+    }
+
+    .rain-drop {
+      position: absolute;
+      left: var(--x);
+      top: -18%;
+      width: var(--w);
+      height: var(--h);
+      border-radius: 999px;
+      opacity: var(--alpha);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(222, 235, 218, 0.8) 28%, rgba(222, 235, 218, 0.12));
+      transform: translate3d(0, 0, 0) rotate(var(--angle));
+      animation: drop-fall var(--speed) linear infinite;
+      animation-delay: var(--delay);
+      will-change: transform, opacity;
+    }
+
+    .rain-drop.is-near {
+      width: var(--w);
+      height: var(--h);
+      filter: blur(0.75px);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(241, 247, 226, 0.95) 36%, rgba(241, 247, 226, 0.08));
+    }
+
+    .glass-streak {
+      position: absolute;
+      left: var(--x);
+      top: var(--y);
+      width: 1px;
+      height: var(--h);
+      border-radius: 999px;
+      opacity: var(--alpha);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(236, 244, 222, 0.46), rgba(255, 255, 255, 0));
+      box-shadow:
+        0 0 9px rgba(230, 240, 218, 0.18),
+        1px 0 0 rgba(7, 12, 10, 0.16);
+      animation: glass-slide var(--speed) ease-in infinite;
+      animation-delay: var(--delay);
+      will-change: transform, opacity;
+    }
+
+    .ripple {
+      position: absolute;
+      left: var(--x);
+      bottom: var(--y);
+      width: var(--s);
+      aspect-ratio: 2.8 / 1;
+      border-radius: 50%;
+      border: 1px solid rgba(226, 239, 214, 0.28);
+      opacity: 0;
+      transform: translate3d(-50%, 0, 0) scale(0.2);
+      animation: ripple-spread var(--speed) ease-out infinite;
+      animation-delay: var(--delay);
+      will-change: transform, opacity;
+    }
+
+    .rail-line {
+      position: absolute;
+      left: 7%;
+      right: 7%;
+      bottom: 25%;
+      height: 1px;
+      background: rgba(230, 213, 184, 0.45);
+      box-shadow: 0 14px 0 rgba(230, 213, 184, 0.14), 0 -14px 0 rgba(230, 213, 184, 0.12);
+      transform: rotate(-4deg);
+      z-index: 2;
+    }
+
+    .banana-sun {
+      position: absolute;
+      top: 10%;
+      right: 11%;
+      width: clamp(7rem, 18vw, 13rem);
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle, rgba(230, 200, 117, 0.92), rgba(197, 160, 89, 0.26) 45%, transparent 70%);
+      filter: blur(0.4px);
+      mix-blend-mode: screen;
+      z-index: 2;
+    }
+
+    .rain-text {
+      position: absolute;
+      left: 7%;
+      bottom: 8%;
+      width: min(26rem, 82%);
+      padding: 1rem;
+      border-left: 2px solid rgba(230, 200, 117, 0.7);
+      color: #f3dfb7;
+      background: rgba(10, 16, 13, 0.56);
+      backdrop-filter: blur(6px);
+      z-index: 5;
+    }
+
+    .rain-text p {
+      color: rgba(243, 223, 183, 0.8);
+    }
+
+    /* 9. 意象墙 */
+    .symbol-grid {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .symbol-card {
+      position: relative;
+      min-height: 13rem;
+      padding: 1.1rem;
+      border: 1px solid rgba(107, 29, 47, 0.18);
+      border-radius: 8px;
+      background: rgba(240, 220, 184, 0.6);
+      overflow: hidden;
+      box-shadow: 0 18px 48px rgba(55, 36, 17, 0.12);
+    }
+
+    .symbol-card svg {
+      width: 3.2rem;
+      margin-bottom: 0.7rem;
+      color: var(--blood);
+      opacity: 0.76;
+    }
+
+    .symbol-card:nth-child(2n) {
+      background: rgba(218, 198, 156, 0.58);
+    }
+
+    .symbol-card:nth-child(3n) {
+      background: rgba(232, 218, 192, 0.7);
+    }
+
+    .symbol-burst {
+      position: absolute;
+      right: -2rem;
+      top: -2rem;
+      width: 9rem;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(230, 200, 117, 0.35), transparent 68%);
+      opacity: 0;
+      transform: scale(0.6);
+      transition: opacity 900ms ease, transform 900ms ease;
+    }
+
+    .is-visible .symbol-burst {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    /* 10. 终章 */
+    .epilogue {
+      min-height: 112svh;
+      text-align: center;
+      background:
+        radial-gradient(circle at 50% 42%, rgba(197, 160, 89, 0.16), transparent 24rem),
+        linear-gradient(180deg, #15100d 0%, #291119 45%, #08070a 100%);
+    }
+
+    .epilogue .chapter-title {
+      color: #f1dcb0;
+    }
+
+    .prophecy {
+      max-width: 56rem;
+      margin: clamp(2rem, 6vw, 4rem) auto 0;
+      color: #c56b67;
+      font-size: clamp(1.35rem, 4.5vw, 3.8rem);
+      line-height: 1.55;
+      letter-spacing: clamp(0.12em, 1.2vw, 0.34em);
+      text-shadow: 0 0 30px rgba(107, 29, 47, 0.38);
+    }
+
+    .last-silence {
+      margin: 3rem auto 0;
+      max-width: 34rem;
+      color: rgba(243, 223, 183, 0.48);
+      font-family: var(--font-sans);
+      font-size: 0.72rem;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+    }
+
+    .sand {
+      position: absolute;
+      inset: auto 0 0;
+      height: 40%;
+      background:
+        radial-gradient(circle at 20% 90%, rgba(230, 200, 117, 0.18), transparent 12rem),
+        linear-gradient(0deg, rgba(230, 213, 184, 0.22), transparent);
+      filter: blur(12px);
+      opacity: 0;
+      transform: translateY(18%);
+      transition: opacity 1400ms ease, transform 1400ms ease;
+    }
+
+    .is-visible .sand {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* 全局黄蝴蝶粒子。每个粒子由两个翅膀组成，飞行轨迹交给父元素，振翅交给子元素。 */
+    .butterfly {
+      position: absolute;
+      left: var(--x);
+      top: 110%;
+      width: var(--size);
+      height: var(--size);
+      opacity: var(--alpha);
+      transform-style: preserve-3d;
+      animation: butterfly-flight var(--duration) linear infinite;
+      animation-delay: var(--delay);
+      will-change: transform, opacity;
+    }
+
+    .butterfly span {
+      position: absolute;
+      top: 16%;
+      width: 52%;
+      height: 70%;
+      border-radius: 72% 28% 58% 42%;
+      background:
+        radial-gradient(circle at 38% 32%, #f9e7a1, #e0b64c 54%, #a76e23 100%);
+      transform-origin: 100% 50%;
+      animation: wing 220ms ease-in-out infinite alternate;
+      box-shadow: 0 0 12px rgba(230, 200, 117, 0.22);
+    }
+
+    .butterfly span:last-child {
+      right: 0;
+      transform-origin: 0 50%;
+      animation-direction: alternate-reverse;
+    }
+
+    @keyframes butterfly-flight {
+      0% {
+        transform: translate3d(0, 0, 0) rotateZ(var(--rot)) rotateY(0deg);
+        opacity: 0;
+      }
+      8% { opacity: var(--alpha); }
+      50% {
+        transform: translate3d(var(--drift), -58vh, 0) rotateZ(calc(var(--rot) + 30deg)) rotateY(180deg);
+      }
+      92% { opacity: var(--alpha); }
+      100% {
+        transform: translate3d(calc(var(--drift) * -0.4), -122vh, 0) rotateZ(calc(var(--rot) - 25deg)) rotateY(360deg);
+        opacity: 0;
+      }
+    }
+
+    @keyframes wing {
+      from { transform: rotateY(18deg) rotateZ(8deg); }
+      to { transform: rotateY(76deg) rotateZ(-4deg); }
+    }
+
+    @keyframes sigil-drift {
+      from { transform: translate(-50%, -50%) rotate(0deg); }
+      to { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+
+    @keyframes ring-spin {
+      from { rotate: 0deg; }
+      to { rotate: 360deg; }
+    }
+
+    @keyframes breathe {
+      0%, 100% { opacity: 0.48; transform: translateX(-50%) translateY(0); }
+      50% { opacity: 1; transform: translateX(-50%) translateY(-0.38rem); }
+    }
+
+    @keyframes drop-fall {
+      0% {
+        transform: translate3d(0, -22vh, 0) rotate(var(--angle));
+        opacity: 0;
+      }
+      8% {
+        opacity: var(--alpha);
+      }
+      92% {
+        opacity: var(--alpha);
+      }
+      100% {
+        transform: translate3d(var(--drift), 128vh, 0) rotate(var(--angle));
+        opacity: 0;
+      }
+    }
+
+    @keyframes glass-slide {
+      0% {
+        transform: translate3d(0, -12%, 0) scaleY(0.35);
+        opacity: 0;
+      }
+      18% {
+        opacity: var(--alpha);
+      }
+      70% {
+        transform: translate3d(var(--drift), 34%, 0) scaleY(1);
+        opacity: calc(var(--alpha) * 0.72);
+      }
+      100% {
+        transform: translate3d(var(--drift), 72%, 0) scaleY(1.25);
+        opacity: 0;
+      }
+    }
+
+    @keyframes ripple-spread {
+      0% {
+        opacity: 0;
+        transform: translate3d(-50%, 0, 0) scale(0.15);
+      }
+      18% {
+        opacity: 0.42;
+      }
+      100% {
+        opacity: 0;
+        transform: translate3d(-50%, 0, 0) scale(1.3);
+      }
+    }
+
+    @media (min-width: 768px) {
+      .chapter {
+        min-height: 100vh;
+      }
+
+      .chapter-grid {
+        grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
+      }
+
+      .chapter-rail {
+        display: block;
+      }
+
+      .timeline {
+        padding-left: 0;
+        gap: 2rem;
+      }
+
+      .timeline::before {
+        left: 50%;
+      }
+
+      .timeline-card {
+        width: calc(50% - 2rem);
+      }
+
+      .timeline-card:nth-child(odd) {
+        margin-left: auto;
+      }
+
+      .timeline-card:nth-child(odd)::before {
+        left: -2.35rem;
+      }
+
+      .timeline-card:nth-child(even)::before {
+        left: auto;
+        right: -2.35rem;
+      }
+
+      .tarot-row {
+        grid-auto-flow: initial;
+        grid-auto-columns: initial;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        overflow: visible;
+      }
+
+      .tarot-card {
+        min-height: 35rem;
+      }
+
+      .symbol-grid {
+        grid-template-columns: repeat(6, 1fr);
+        align-items: stretch;
+      }
+
+      .symbol-card:nth-child(1) { grid-column: span 2; min-height: 18rem; }
+      .symbol-card:nth-child(2) { grid-column: span 2; min-height: 14rem; }
+      .symbol-card:nth-child(3) { grid-column: span 2; min-height: 18rem; }
+      .symbol-card:nth-child(4) { grid-column: span 3; min-height: 13rem; }
+      .symbol-card:nth-child(5) { grid-column: span 3; min-height: 13rem; }
+
+    }
+
+    @media (min-width: 1200px) {
+      .chapter {
+        padding-inline: clamp(5rem, 7vw, 8rem);
+      }
+
+      .chapter.tall {
+        min-height: 118vh;
+      }
+
+      .artifact-stage,
+      .war-collage,
+      .rain-stage {
+        min-height: 41rem;
+      }
+
+      .family-board,
+      .family-canvas {
+        min-height: 38rem;
+        height: 38rem;
+      }
+    }
+
+    @media (max-width: 480px) {
+      :root {
+        --section-pad-x: 1rem;
+        --section-pad-y: 4.1rem;
+      }
+
+      .chapter-title {
+        letter-spacing: 0.08em;
+      }
+
+      .hero h1 {
+        writing-mode: vertical-rl;
+        margin-inline: auto;
+        letter-spacing: 0.18em;
+      }
+
+      .map-note {
+        position: relative;
+        left: auto !important;
+        right: auto !important;
+        top: auto !important;
+        bottom: auto !important;
+        margin-top: 0.6rem;
+        max-width: none;
+      }
+
+      .artifact-stage {
+        min-height: 34rem;
+      }
+
+      .map-wrap {
+        min-height: 30rem;
+      }
+
+      .family-image,
+      .family-board .image-patina,
+      .family-canvas {
+        height: 34rem;
+      }
+
+      .family-canvas {
+        margin-top: -34rem;
+      }
+
+      .family-canvas {
+        margin-top: 0;
+      }
+
+      .scene-caption {
+        display: block;
+      }
+
+      .scene-caption .scene-mark {
+        display: none;
+      }
+
+      .scene-caption span {
+        max-width: 100%;
+      }
+
+      .map-note {
+        display: none;
+      }
+
+      .artifact {
+        width: 8rem;
+      }
+
+      .artifact:nth-child(2) { --ax: 1rem !important; --ay: 2rem !important; }
+      .artifact:nth-child(3) { --ax: calc(100% - 9rem) !important; --ay: 8rem !important; }
+      .artifact:nth-child(4) { --ax: 2rem !important; --ay: 17rem !important; }
+      .artifact:nth-child(5) { --ax: calc(100% - 9rem) !important; --ay: 24rem !important; }
+
+      .war-collage,
+      .rain-stage {
+        min-height: 36rem;
+      }
+
+      .war-paper {
+        display: none;
+      }
+
+      .war-number {
+        position: absolute;
+        font-size: 9rem;
+        top: 1rem;
+        left: 0.5rem;
+      }
+
+      .goldfish-ring {
+        right: auto;
+        left: 50%;
+        bottom: 2rem;
+        translate: -50% 0;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 1ms !important;
+      }
+
+      .butterfly-field,
+      .cursor-flare {
+        display: none;
+      }
+
+      .reveal {
+        opacity: 1;
+        filter: none;
+        transform: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- 全局视觉层：只负责质感与氛围，不承载正文，避免遮挡阅读。 -->
+  <div class="scroll-progress" aria-hidden="true"></div>
+  <div class="butterfly-field" aria-hidden="true"></div>
+  <div class="cursor-flare" aria-hidden="true"></div>
+  <div class="noise-layer" aria-hidden="true"></div>
+  <div class="vignette-layer" aria-hidden="true"></div>
+
+  <aside class="chapter-rail" aria-label="章节导航">
+    <nav>
+      <a href="#hero" aria-label="宿命的序曲"></a>
+      <a href="#alchemy" aria-label="吉普赛人的磁铁"></a>
+      <a href="#founding" aria-label="镜子之城的坐标"></a>
+      <a href="#chronicle" aria-label="马孔多的四维时空"></a>
+      <a href="#genealogy" aria-label="孤独者的肖像"></a>
+      <a href="#family" aria-label="名字的轮回"></a>
+      <a href="#war" aria-label="三十二场起义之后"></a>
+      <a href="#rain" aria-label="繁华的腐烂"></a>
+      <a href="#symbolism" aria-label="魔幻密码"></a>
+      <a href="#epilogue" aria-label="终极预言"></a>
+    </nav>
+  </aside>
+
+  <main class="site">
+    <section id="hero" class="chapter hero dark is-visible" data-section>
+      <div class="sigil" aria-hidden="true"></div>
+      <div class="chapter-inner">
+        <p class="hero-subtitle reveal">Latin American Magical Realism</p>
+        <h1 class="reveal" style="--delay:120ms">百年孤独</h1>
+        <p class="hero-subtitle reveal" style="--delay:240ms">拉丁美洲魔幻现实主义的史诗丰碑</p>
+        <p class="type-quote" data-type-quote>多年以后，面对行刑队，奥雷里亚诺·布恩迪亚上校将会回想起父亲带他去见识冰块的那个遥远下午。</p>
+      </div>
+      <a class="down-arrow" href="#alchemy" aria-label="前往下一章"></a>
+    </section>
+
+    <section id="alchemy" class="chapter alchemy tall" data-section>
+      <div class="section-number">02</div>
+      <div class="chapter-inner chapter-grid">
+        <div>
+          <p class="eyebrow reveal">Alchemy / The First Knock</p>
+          <h2 class="chapter-title reveal" style="--delay:80ms">吉普赛人的磁铁</h2>
+          <p class="chapter-kicker reveal" style="--delay:160ms">世界不是从边界之外进入马孔多的，它先以磁铁、冰块、放大镜和羊皮纸的形态，闯进布恩迪亚家族的想象。</p>
+          <div class="paper-panel reveal" style="--delay:260ms">
+            <p class="copy">梅尔基亚德斯带来的不是玩具，而是文明的裂缝。铁锅、钉子、门闩被无形力量牵引，何塞·阿尔卡蒂奥·布恩迪亚从此相信世界有一套可以被破译的隐秘秩序。</p>
+            <p class="copy">冰块像一枚透明的预言，冷到刺痛，却让人误以为未来可以被握在掌心。</p>
+          </div>
+        </div>
+        <div class="artifact-stage reveal" style="--delay:180ms" aria-label="炼金术标本柜">
+          <img class="alchemy-image" src="alchemy-gypsy-magnet.png" alt="梅尔基亚德斯展示磁铁、冰块和炼金器具的场景" loading="lazy">
+          <div class="image-patina" aria-hidden="true"></div>
+          <div class="iron-field" aria-hidden="true"></div>
+          <div class="scene-caption">
+            <div>
+              <strong>文明第一次敲门</strong>
+              <span>磁铁、冰块与羊皮纸在同一张桌上发亮，马孔多从此不再只是荒野里的村庄。</span>
+            </div>
+            <div class="scene-mark">II</div>
+          </div>
+          <div class="artifact" tabindex="0" style="--ax:8%;--ay:12%;--ar:-8deg">
+            <svg viewBox="0 0 100 100" aria-hidden="true"><path d="M28 18v30c0 13 9 23 22 23s22-10 22-23V18h-15v30c0 5-2 9-7 9s-7-4-7-9V18z" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round"/></svg>
+            <small>Magnet</small>
+          </div>
+          <div class="artifact" tabindex="0" style="--ax:55%;--ay:8%;--ar:6deg">
+            <svg viewBox="0 0 100 100" aria-hidden="true"><path d="M34 20h32l-5 18v33c0 6-5 10-11 10s-11-4-11-10V38z" fill="none" stroke="currentColor" stroke-width="6"/><path d="M39 54h22" stroke="currentColor" stroke-width="5"/></svg>
+            <small>Gold Dust</small>
+          </div>
+          <div class="artifact" tabindex="0" style="--ax:17%;--ay:58%;--ar:5deg">
+            <svg viewBox="0 0 100 100" aria-hidden="true"><path d="M23 32l27-15 27 15v35L50 83 23 67z" fill="none" stroke="currentColor" stroke-width="6"/><path d="M23 32l27 16 27-16M50 48v35" stroke="currentColor" stroke-width="4"/></svg>
+            <small>Ice</small>
+          </div>
+          <div class="artifact" tabindex="0" style="--ax:60%;--ay:60%;--ar:-5deg">
+            <svg viewBox="0 0 100 100" aria-hidden="true"><path d="M24 20c16 8 36-7 52 3v56c-16-10-36 5-52-3z" fill="none" stroke="currentColor" stroke-width="5"/><path d="M33 36h34M33 49h27M33 62h31" stroke="currentColor" stroke-width="4"/></svg>
+            <small>Manuscript</small>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="founding" class="chapter founding" data-section>
+      <div class="section-number">03</div>
+      <div class="chapter-inner chapter-grid">
+        <div class="map-wrap reveal" style="--delay:160ms">
+          <img class="map-image" src="macondo-mirror-city-map.png" alt="马孔多镜子之城的梦境地图" loading="lazy">
+          <div class="image-patina" aria-hidden="true"></div>
+          <svg class="map-svg" viewBox="0 0 760 520" role="img" aria-label="马孔多梦境地图">
+            <defs>
+              <filter id="inkBlur"><feGaussianBlur stdDeviation="0.4" /></filter>
+            </defs>
+            <path d="M63 392C168 331 176 238 303 269C413 296 433 160 545 169C637 177 672 247 715 213" fill="none" stroke="#1e3225" stroke-width="18" stroke-linecap="round" opacity=".18"/>
+            <path class="draw-line" d="M56 383C168 331 176 238 303 269C413 296 433 160 545 169C637 177 672 247 715 213" fill="none" stroke="#1e3225" stroke-width="4" stroke-linecap="round"/>
+            <path class="draw-line" d="M164 420C187 347 249 321 338 321C430 321 465 258 513 228" fill="none" stroke="#6b1d2f" stroke-width="3" stroke-dasharray="12 10"/>
+            <path class="draw-line" d="M231 170C283 116 355 105 420 139C488 175 535 131 601 90" fill="none" stroke="#6b1d2f" stroke-width="2" stroke-dasharray="7 9"/>
+            <g fill="#6b1d2f" opacity=".75">
+              <circle cx="310" cy="270" r="9"/><circle cx="360" cy="315" r="7"/><circle cx="502" cy="229" r="8"/>
+            </g>
+            <g stroke="#20170f" stroke-width="3" fill="none" filter="url(#inkBlur)" opacity=".72">
+              <path d="M322 255h46v44h-46zM345 255v-30M334 232c12-18 31-18 43 0"/>
+              <path d="M116 122c34 9 48 32 41 67c-26-12-44-34-41-67z"/>
+              <path d="M626 332c-42 22-52 62-29 101c37-16 55-55 29-101z"/>
+            </g>
+          </svg>
+          <div class="scene-caption">
+            <div>
+              <strong>一张被想象照亮的地图</strong>
+              <span>镜子之城在远方发亮，路线、沼泽和村落都像尚未凝固的命运草图。</span>
+            </div>
+            <div class="scene-mark">III</div>
+          </div>
+          <div class="map-note one">沼泽边界：众人以为穿过它就能抵达文明，却一次次回到同一个孤立圆心。</div>
+          <div class="map-note two">镜子之城：不是地理目标，而是创世者的幻觉。</div>
+          <div class="map-note three">栗子树：狂想最终被绑缚之处，也是家族命运的暗桩。</div>
+        </div>
+        <div>
+          <p class="eyebrow reveal">Founding Map / Coordinates</p>
+          <h2 class="chapter-title reveal" style="--delay:80ms">镜子之城的坐标</h2>
+          <p class="chapter-kicker reveal" style="--delay:160ms">马孔多不是被发现的，它是在失路、炎热、沼泽和狂想中被发明的。</p>
+          <p class="copy reveal" style="--delay:260ms">何塞·阿尔卡蒂奥·布恩迪亚带着一群人走进湿热的荒野，像带着一个尚未出生的世界寻找脐带。地图上的河流、房屋与边界都不稳定，因为这个小镇从第一天起就更像一场被命名的梦。</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="chronicle" class="chapter chronicle tall" data-section>
+      <div class="section-number">04</div>
+      <div class="chapter-inner">
+        <p class="eyebrow reveal">Chronicle / Four-Dimensional Time</p>
+        <h2 class="chapter-title reveal" style="--delay:80ms">马孔多的四维时空</h2>
+        <p class="chapter-kicker reveal" style="--delay:160ms">历史在这里不向前走，它像潮湿墙壁上的霉斑一样扩散、重叠，又在相同的名字里重新变黑。</p>
+        <div class="timeline" aria-label="马孔多编年史">
+          <article class="timeline-card reveal" style="--delay:180ms">
+            <h3>建村伊始</h3>
+            <p>一切仍然洁净，事物年轻到尚未拥有固定名字。创世者相信科学可以开启黄金、星辰和海洋，也相信马孔多终将成为一座明亮的镜子之城。</p>
+          </article>
+          <article class="timeline-card reveal" style="--delay:280ms">
+            <h3>香蕉热潮</h3>
+            <p>铁路带来机器、合同、外语和短暂繁荣。异乡资本像潮水涌入，小镇的日常被工资、罢工、广场与被篡改的记忆撕开。</p>
+          </article>
+          <article class="timeline-card reveal" style="--delay:380ms">
+            <h3>连绵大雨</h3>
+            <p>四年十一个月的雨把喧嚣浸成霉味。房屋、牲畜、衣物和意志都吸水变重，繁荣的外壳在潮湿中慢慢腐烂。</p>
+          </article>
+          <article class="timeline-card reveal" style="--delay:480ms">
+            <h3>末日废墟</h3>
+            <p>飓风不是灾难的开始，而是预言的句号。马孔多被从记忆里卷走，像一页终于读完、却从未真正被理解的手稿。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="genealogy" class="chapter genealogy dark tall" data-section>
+      <div class="section-number">05</div>
+      <div class="chapter-inner">
+        <p class="eyebrow reveal">Genealogy / Portraits of Solitude</p>
+        <h2 class="chapter-title reveal" style="--delay:80ms">孤独者的肖像</h2>
+        <p class="chapter-kicker reveal" style="--delay:160ms">人物不是独立命运，而是同一种孤独在不同身体上的显影：创世、秩序、战争、禁闭、飞升与预言，彼此照亮，也彼此吞没。</p>
+        <div class="tarot-row" aria-label="布恩迪亚家族人物卡片">
+          <article class="tarot-card tilt-card reveal" data-mark="I" style="--delay:180ms">
+            <div class="tarot-figure">
+              <img src="jose-arcadio-buendia.png" alt="何塞·阿尔卡蒂奥·布恩迪亚的塔罗风格肖像" loading="lazy">
+            </div>
+            <small>第一代</small>
+            <h3>何塞·阿尔卡蒂奥·布恩迪亚</h3>
+            <p>狂人与树。科学狂想像火焰一样烧穿他的日常，羊皮纸手稿在他眼前闪烁，最终他被绑在栗子树下，与自己发明的世界隔着语言和雨水。</p>
+          </article>
+          <article class="tarot-card tilt-card reveal" data-mark="II" style="--delay:260ms">
+            <div class="tarot-figure">
+              <img src="ursula-iguaran.png" alt="乌尔苏拉·伊瓜兰的塔罗风格肖像" loading="lazy">
+            </div>
+            <small>第一代</small>
+            <h3>乌尔苏拉·伊瓜兰</h3>
+            <p>盲眼的女族长。她用糖果小动物维系家族的现实重量；晚年双目失明，却比所有人更早摸到时间循环的骨骼。</p>
+          </article>
+          <article class="tarot-card tilt-card reveal" data-mark="XXXII" style="--delay:340ms">
+            <div class="tarot-figure">
+              <img src="aureliano-buendia.png" alt="奥雷里亚诺·布恩迪亚上校的塔罗风格肖像" loading="lazy">
+            </div>
+            <small>第二代</small>
+            <h3>奥雷里亚诺·布恩迪亚上校</h3>
+            <p>战争与金鱼。三十二场起义没有留下胜利，只留下电报、协议和沉默。他在作坊里熔铸又重造二十五条小金鱼，用机械重复抵抗空洞。</p>
+          </article>
+          <article class="tarot-card tilt-card reveal" data-mark="R" style="--delay:420ms">
+            <div class="tarot-figure">
+              <img src="rebeca.png" alt="丽贝卡的塔罗风格肖像" loading="lazy">
+            </div>
+            <small>收养者</small>
+            <h3>丽贝卡</h3>
+            <p>泥土与禁闭。她带着遗骨、沉默和异乡的饥饿进入家族，啃食泥墙，也啃食自己的来历；爱情与丑闻之后，她把余生封存在一间无人叩门的屋子里。</p>
+          </article>
+          <article class="tarot-card tilt-card reveal" data-mark="ASC" style="--delay:500ms">
+            <div class="tarot-figure">
+              <img src="remedios-the-beauty.png" alt="美人蕾梅黛丝的塔罗风格肖像" loading="lazy">
+            </div>
+            <small>飞升者</small>
+            <h3>美人蕾梅黛丝</h3>
+            <p>纯净到近乎危险。她不理解欲望，也不向尘世解释自己；当白床单在午后升起，她像一道无法占有的光，从家族的现实中安静脱身。</p>
+          </article>
+          <article class="tarot-card tilt-card reveal" data-mark="M" style="--delay:580ms">
+            <div class="tarot-figure">
+              <img src="melquiades.png" alt="梅尔基亚德斯的塔罗风格肖像" loading="lazy">
+            </div>
+            <small>吉普赛人</small>
+            <h3>梅尔基亚德斯</h3>
+            <p>时间之外的访客。他带来磁铁、冰块、炼金术和羊皮纸，也带来马孔多无法立刻读懂的未来；他的死亡与归来，使预言拥有了人的面孔。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="family" class="chapter family tall" data-section>
+      <div class="section-number">06</div>
+      <div class="chapter-inner chapter-grid">
+        <div>
+          <p class="eyebrow reveal">Family Tree / Maze of Names</p>
+          <h2 class="chapter-title reveal" style="--delay:80ms">名字的轮回</h2>
+          <p class="chapter-kicker reveal" style="--delay:160ms">在布恩迪亚家族，名字不是标签，而是性格、欲望与孤独命运的遗传回声。</p>
+          <p class="copy reveal" style="--delay:260ms">“何塞·阿尔卡蒂奥”常常携带莽撞、肉身和原始冲动；“奥雷里亚诺”则更靠近沉思、孤僻、预感和战争。重复命名像一张看不见的网，温柔地继承，也冷酷地判决。</p>
+        </div>
+        <div class="family-board reveal" style="--delay:200ms" aria-label="布恩迪亚家族树，可横向拖动查看">
+          <img class="family-image" src="buendia-family-tree.png" alt="布恩迪亚家族树与命运轮回的象征图" loading="lazy">
+          <div class="image-patina" aria-hidden="true"></div>
+          <div class="scene-caption">
+            <div>
+              <strong>名字不是标签，是回声</strong>
+              <span>轻触金色节点，查看重复姓名背后的性格、欲望与孤独遗传。</span>
+            </div>
+            <div class="scene-mark">VI</div>
+          </div>
+          <div class="family-canvas">
+            <svg class="family-svg" viewBox="0 0 800 520" aria-hidden="true">
+              <path class="draw-line" d="M140 90C230 120 280 120 370 92" stroke="#6b1d2f" stroke-width="3" fill="none"/>
+              <path class="draw-line" d="M255 140v90M255 230H120M255 230H390M255 230H535" stroke="#6b1d2f" stroke-width="3" fill="none"/>
+              <path class="draw-line" d="M390 280v85M390 365H270M390 365H515M535 280v84M535 364H650" stroke="#1e3225" stroke-width="3" fill="none"/>
+              <path class="draw-line" d="M650 414c60 30 70 56 40 82" stroke="#6b1d2f" stroke-width="3" fill="none"/>
+            </svg>
+            <button class="family-node" style="left:18%;top:18%" data-note="狂想 / 磁铁 / 栗子树 / 创世者"><strong>何塞·阿尔卡蒂奥</strong><span>创世者</span></button>
+            <button class="family-node" style="left:41%;top:16%" data-note="糖果 / 盲眼 / 秩序 / 女族长"><strong>乌尔苏拉</strong><span>家族支柱</span></button>
+            <button class="family-node" style="left:28%;top:39%" data-note="肉身 / 出走 / 归来 / 枪声"><strong>何塞·阿尔卡蒂奥</strong><span>重复的冲动</span></button>
+            <button class="family-node" style="left:50%;top:42%" data-note="战争 / 预感 / 金鱼 / 虚无"><strong>奥雷里亚诺</strong><span>上校</span></button>
+            <button class="family-node" style="left:66%;top:37%" data-note="等待 / 禁忌 / 雨 / 家屋"><strong>阿玛兰妲</strong><span>漫长拒绝</span></button>
+            <button class="family-node" style="left:36%;top:67%" data-note="美貌 / 飞升 / 无辜 / 旁观"><strong>蕾梅黛丝</strong><span>美人</span></button>
+            <button class="family-node" style="left:59%;top:68%" data-note="香蕉 / 电报 / 广场 / 遗忘"><strong>何塞·阿尔卡蒂奥第二</strong><span>见证者</span></button>
+            <button class="family-node" style="left:76%;top:75%" data-note="破译 / 羊皮纸 / 飓风 / 终点"><strong>奥雷里亚诺</strong><span>最后读者</span></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="war" class="chapter war dark tall" data-section>
+      <div class="section-number">07</div>
+      <div class="chapter-inner chapter-grid">
+        <div>
+          <p class="eyebrow reveal">War / Hollow Victory</p>
+          <h2 class="chapter-title reveal" style="--delay:80ms">三十二场起义之后</h2>
+          <p class="chapter-kicker reveal" style="--delay:160ms">战争把上校推向历史中心，又把他的灵魂搬空，只剩金鱼在手指间冷却。</p>
+          <div class="paper-panel reveal" style="--delay:260ms">
+            <p class="copy">他发动三十二场武装起义，全部失败；他拥有十七个儿子，又逐一被命运抹去。权力、荣誉和协议越是接近，他越像从自己身体里撤退。</p>
+          </div>
+        </div>
+        <div class="war-collage reveal" style="--delay:200ms">
+          <img class="war-image" src="aureliano-war-aftermath.png" alt="奥雷里亚诺上校三十二场起义后的作坊与战场余烬" loading="lazy">
+          <div class="image-patina" aria-hidden="true"></div>
+          <div class="scene-caption">
+            <div>
+              <strong>胜利之后更深的空洞</strong>
+              <span>作坊、战报和小金鱼沉在同一片阴影里，历史只剩下被反复熔化的金属。</span>
+            </div>
+            <div class="scene-mark">32</div>
+          </div>
+          <div class="war-number" aria-hidden="true">32</div>
+          <article class="war-paper one" data-parallax="0.08">
+            <h3>电报</h3>
+            <p>命令越短，沉默越长。远方战线像湿纸上的墨点扩散。</p>
+          </article>
+          <article class="war-paper two" data-parallax="-0.06">
+            <h3>停战协议</h3>
+            <p>签字不是结束，而是空洞获得官方印章。</p>
+          </article>
+          <article class="war-paper three" data-parallax="0.11">
+            <h3>作坊</h3>
+            <p>金鱼被熔化、重铸、再熔化，成为一套没有出口的祈祷。</p>
+          </article>
+          <div class="goldfish-ring" aria-hidden="true">
+            <span style="--i:0"></span><span style="--i:1"></span><span style="--i:2"></span><span style="--i:3"></span><span style="--i:4"></span><span style="--i:5"></span><span style="--i:6"></span><span style="--i:7"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="rain" class="chapter rain dark tall" data-section>
+      <div class="section-number">08</div>
+      <div class="chapter-inner chapter-grid">
+        <div class="rain-stage reveal" style="--delay:160ms">
+          <img class="rain-image" src="banana-company-rain.png" alt="暴雨中的马孔多香蕉公司、铁路与广场" loading="lazy">
+          <div class="rain-decay" aria-hidden="true"></div>
+          <div class="banana-sun" aria-hidden="true"></div>
+          <div class="rail-line" aria-hidden="true"></div>
+          <div class="rain-ripples" aria-hidden="true"></div>
+          <div class="rain-sheets" aria-hidden="true"></div>
+          <div class="rain-streaks" aria-hidden="true"></div>
+          <div class="rain-text">
+            <p>雨不是天气，它是繁华被清洗后的证词。铁轨仍在，广场仍在，但记忆被官方语言擦成空白。</p>
+          </div>
+        </div>
+        <div>
+          <p class="eyebrow reveal">Banana Company / The Rot of Prosperity</p>
+          <h2 class="chapter-title reveal" style="--delay:80ms">香蕉公司与雨</h2>
+          <p class="chapter-kicker reveal" style="--delay:160ms">现代性曾以铁路、工资和电灯照亮马孔多，却在最潮湿的夜晚把它推向遗忘。</p>
+          <p class="copy reveal" style="--delay:260ms">外来资本进入小镇时，热带金绿明亮得近乎不真实。很快，合同、罢工、广场和失踪者被雨水拖成一道难以辨认的污痕。</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="symbolism" class="chapter symbolism tall" data-section>
+      <div class="section-number">09</div>
+      <div class="chapter-inner">
+        <p class="eyebrow reveal">Symbolism / Magical Codes</p>
+        <h2 class="chapter-title reveal" style="--delay:80ms">魔幻密码</h2>
+        <p class="chapter-kicker reveal" style="--delay:160ms">魔幻现实主义不是奇观堆叠，而是现实在极端压力下显露出的隐秘结构。</p>
+        <div class="symbol-grid" aria-label="文学意象解析">
+          <article class="symbol-card reveal" style="--delay:170ms">
+            <div class="symbol-burst" aria-hidden="true"></div>
+            <svg viewBox="0 0 80 80" aria-hidden="true"><path d="M16 42c13-24 35-24 48 0c-13 22-35 22-48 0z" fill="none" stroke="currentColor" stroke-width="5"/><path d="M29 30l22 24M51 30L29 54" stroke="currentColor" stroke-width="5"/></svg>
+            <h3>失眠症</h3>
+            <p>忘记名字，忘记事物功用，最终忘记历史本身。标签贴满世界，却无法阻止意义从语言背后撤离。</p>
+          </article>
+          <article class="symbol-card reveal" style="--delay:240ms">
+            <svg viewBox="0 0 80 80" aria-hidden="true"><path d="M24 12c10 12 10 22 0 34c-10-12-10-22 0-34zM48 18c10 12 10 22 0 34c-10-12-10-22 0-34zM36 42c10 12 10 22 0 34c-10-12-10-22 0-34z" fill="none" stroke="currentColor" stroke-width="5"/></svg>
+            <h3>不息的大雨</h3>
+            <p>四年十一个月的暴雨洗去繁华，也让生命和意志在潮湿中霉烂。它像一场漫长的历史审讯。</p>
+          </article>
+          <article class="symbol-card reveal" style="--delay:310ms">
+            <svg viewBox="0 0 80 80" aria-hidden="true"><path d="M10 40c18-18 36 18 60 0c-18 28-42 28-60 0z" fill="none" stroke="currentColor" stroke-width="5"/><circle cx="54" cy="38" r="3" fill="currentColor"/></svg>
+            <h3>小金鱼</h3>
+            <p>重复劳动不是生产，而是自救。熔化与重造之间，上校把孤独压缩成一枚可握住的金属形状。</p>
+          </article>
+          <article class="symbol-card reveal" style="--delay:380ms">
+            <div class="symbol-burst" aria-hidden="true"></div>
+            <svg viewBox="0 0 80 80" aria-hidden="true"><path d="M39 38C20 14 8 28 14 44c6 17 25 8 25-6zM41 38c19-24 31-10 25 6c-6 17-25 8-25-6z" fill="none" stroke="currentColor" stroke-width="5"/><path d="M40 38v26" stroke="currentColor" stroke-width="5"/></svg>
+            <h3>黄蝴蝶</h3>
+            <p>爱情、预兆与气味。蝴蝶追随人物，也追随命运，在美丽中暴露一种无法摆脱的纠缠。</p>
+          </article>
+          <article class="symbol-card reveal" style="--delay:450ms">
+            <svg viewBox="0 0 80 80" aria-hidden="true"><path d="M18 12c14 6 30-5 44 2v52c-14-7-30 4-44-2z" fill="none" stroke="currentColor" stroke-width="5"/><path d="M27 28h25M27 40h20M27 52h25" stroke="currentColor" stroke-width="4"/></svg>
+            <h3>羊皮纸手稿</h3>
+            <p>未来早已被写下，只是等待最后一个读者抵达。语言在这里既是钥匙，也是牢笼。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="epilogue" class="chapter epilogue dark" data-section>
+      <div class="sand" aria-hidden="true"></div>
+      <div class="chapter-inner">
+        <p class="eyebrow reveal">Epilogue / The Final Prophecy</p>
+        <h2 class="chapter-title reveal" style="--delay:80ms">终极预言</h2>
+        <p class="chapter-kicker reveal" style="--delay:160ms">时间不是河流，而是一个无法离开的圆圈。</p>
+        <p class="prophecy reveal" style="--delay:280ms">羊皮纸手稿所记载的一切将永远不会重演，因为注定经受百年孤独的家族不会有第二次机会在大地上出现。</p>
+        <p class="last-silence reveal" style="--delay:520ms">Macondo remains as a trace of wind, dust, ink and names.</p>
+      </div>
+    </section>
+  </main>
+
+  <div class="family-tip" id="familyTip" role="dialog" aria-live="polite" aria-hidden="true">
+    <button type="button" aria-label="关闭人物注释" id="closeTip">×</button>
+    <strong id="tipTitle"></strong>
+    <p id="tipText" style="margin:0.35rem 0 0;color:rgba(245,227,191,.78);font-size:.9rem"></p>
+  </div>
+
+  <script>
+    /*
+      Vanilla JS 交互系统
+      ------------------------------------------------------------
+      这里把 JS 拆成四个轻量模块：
+      1. 文字逐字浮现：把首屏金句拆成 span，以 CSS transition-delay 做错位显影。
+      2. 粒子池：一次性创建固定数量黄蝴蝶和铁屑点，不在滚动中反复增删 DOM。
+      3. IntersectionObserver：统一给章节和 reveal 元素打 is-visible，触发 CSS 动画。
+      4. 指针增强：桌面端启用光标光晕、卡片 tilt、轻微视差；移动端保持触摸阅读优先。
+    */
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const isFinePointer = window.matchMedia("(pointer: fine)").matches;
+    const sections = Array.from(document.querySelectorAll("[data-section]"));
+    const railLinks = Array.from(document.querySelectorAll(".chapter-rail a"));
+    const progress = document.querySelector(".scroll-progress");
+
+    function buildTypeQuote() {
+      const quote = document.querySelector("[data-type-quote]");
+      if (!quote) return;
+      const text = quote.textContent.trim();
+      quote.textContent = "";
+      Array.from(text).forEach((char, index) => {
+        const span = document.createElement("span");
+        span.textContent = char === " " ? "\u00A0" : char;
+        span.style.setProperty("--i", index);
+        quote.appendChild(span);
+      });
+    }
+
+    function createButterflies() {
+      if (reduceMotion) return;
+      const field = document.querySelector(".butterfly-field");
+      const count = window.innerWidth <= 480 ? 24 : window.innerWidth < 900 ? 38 : 56;
+      const fragment = document.createDocumentFragment();
+
+      /*
+        3D 蝴蝶粒子池的数学分布：
+        - x 使用 0-100vw 的均匀分布，保证整个屏幕都有粒子。
+        - drift 使用 -28vw 到 28vw 的横向漂移，避免单调上升。
+        - duration / delay 随机化，让每只蝴蝶处于不同生命周期。
+        - 每个粒子只有两个 span 翅膀，父级负责飞行，子级负责 rotateY 振翅。
+      */
+      for (let i = 0; i < count; i += 1) {
+        const b = document.createElement("div");
+        b.className = "butterfly";
+        b.style.setProperty("--x", `${Math.random() * 100}%`);
+        b.style.setProperty("--size", `${8 + Math.random() * 14}px`);
+        b.style.setProperty("--alpha", `${0.22 + Math.random() * 0.54}`);
+        b.style.setProperty("--duration", `${16 + Math.random() * 26}s`);
+        b.style.setProperty("--delay", `${Math.random() * -32}s`);
+        b.style.setProperty("--drift", `${(Math.random() - 0.5) * 56}vw`);
+        b.style.setProperty("--rot", `${(Math.random() - 0.5) * 80}deg`);
+        b.innerHTML = "<span></span><span></span>";
+        fragment.appendChild(b);
+      }
+      field.appendChild(fragment);
+    }
+
+    function createIronDots() {
+      const field = document.querySelector(".iron-field");
+      if (!field) return;
+      const count = window.innerWidth <= 480 ? 80 : 130;
+      const fragment = document.createDocumentFragment();
+
+      /*
+        铁屑磁场分布：
+        初始位置是随机散点，章节进入视口后，CSS 将它们旋转到不同角度并向外 translate，
+        形成“被磁场吸附成环”的错觉。所有运动都只改 transform，避免触发布局重排。
+      */
+      for (let i = 0; i < count; i += 1) {
+        const dot = document.createElement("span");
+        dot.className = "iron-dot";
+        dot.style.setProperty("--sx", `${(Math.random() - 0.5) * 92}%`);
+        dot.style.setProperty("--sy", `${(Math.random() - 0.5) * 92}%`);
+        dot.style.setProperty("--angle", `${(360 / count) * i + Math.random() * 12}deg`);
+        dot.style.setProperty("--ring", `${8 + Math.random() * 42}vmin`);
+        fragment.appendChild(dot);
+      }
+      field.appendChild(fragment);
+    }
+
+    function createRainSystem() {
+      if (reduceMotion) return;
+      const sheets = document.querySelector(".rain-sheets");
+      const streaks = document.querySelector(".rain-streaks");
+      const ripples = document.querySelector(".rain-ripples");
+      if (!sheets || !streaks || !ripples) return;
+
+      /*
+        雨滴系统：
+        - rain-sheets：大量细长远景雨丝，速度快、透明度低，形成暴雨密度。
+        - rain-streaks：少量近景水痕，速度慢，有玻璃滑落感，提升真实湿润层次。
+        - rain-ripples：底部椭圆涟漪，模拟雨滴打在积水上的扩散。
+        三层都只使用 transform / opacity 动画，避免每帧修改布局。
+      */
+      const isSmall = window.innerWidth <= 480;
+      const sheetCount = isSmall ? 58 : window.innerWidth < 900 ? 86 : 126;
+      const streakCount = isSmall ? 10 : 16;
+      const rippleCount = isSmall ? 12 : 20;
+
+      const sheetFrag = document.createDocumentFragment();
+      for (let i = 0; i < sheetCount; i += 1) {
+        const drop = document.createElement("span");
+        const near = Math.random() > 0.78;
+        drop.className = near ? "rain-drop is-near" : "rain-drop";
+        drop.style.setProperty("--x", `${Math.random() * 112 - 6}%`);
+        drop.style.setProperty("--w", `${near ? 1.4 + Math.random() * 1.8 : 0.7 + Math.random() * 0.9}px`);
+        drop.style.setProperty("--h", `${near ? 84 + Math.random() * 92 : 38 + Math.random() * 72}px`);
+        drop.style.setProperty("--alpha", `${near ? 0.22 + Math.random() * 0.22 : 0.12 + Math.random() * 0.22}`);
+        drop.style.setProperty("--speed", `${near ? 760 + Math.random() * 560 : 620 + Math.random() * 780}ms`);
+        drop.style.setProperty("--delay", `${Math.random() * -2200}ms`);
+        drop.style.setProperty("--angle", `${8 + Math.random() * 8}deg`);
+        drop.style.setProperty("--drift", `${18 + Math.random() * 36}px`);
+        sheetFrag.appendChild(drop);
+      }
+      sheets.appendChild(sheetFrag);
+
+      const streakFrag = document.createDocumentFragment();
+      for (let i = 0; i < streakCount; i += 1) {
+        const streak = document.createElement("span");
+        streak.className = "glass-streak";
+        streak.style.setProperty("--x", `${Math.random() * 96 + 2}%`);
+        streak.style.setProperty("--y", `${Math.random() * 62}%`);
+        streak.style.setProperty("--h", `${56 + Math.random() * 180}px`);
+        streak.style.setProperty("--alpha", `${0.1 + Math.random() * 0.2}`);
+        streak.style.setProperty("--speed", `${3600 + Math.random() * 5200}ms`);
+        streak.style.setProperty("--delay", `${Math.random() * -6200}ms`);
+        streak.style.setProperty("--drift", `${(Math.random() - 0.35) * 22}px`);
+        streakFrag.appendChild(streak);
+      }
+      streaks.appendChild(streakFrag);
+
+      const rippleFrag = document.createDocumentFragment();
+      for (let i = 0; i < rippleCount; i += 1) {
+        const ripple = document.createElement("span");
+        ripple.className = "ripple";
+        ripple.style.setProperty("--x", `${Math.random() * 92 + 4}%`);
+        ripple.style.setProperty("--y", `${Math.random() * 52}%`);
+        ripple.style.setProperty("--s", `${22 + Math.random() * 74}px`);
+        ripple.style.setProperty("--speed", `${1200 + Math.random() * 1800}ms`);
+        ripple.style.setProperty("--delay", `${Math.random() * -3200}ms`);
+        rippleFrag.appendChild(ripple);
+      }
+      ripples.appendChild(rippleFrag);
+    }
+
+    function setupObserver() {
+      /*
+        多阶段滚动观察器：
+        - rootMargin 让章节在进入屏幕前一点点就开始苏醒，避免用户看到空白。
+        - threshold 使用多个阈值，active 导航选择最高可见章节。
+        - CSS 负责具体动画，JS 只改变状态类，保持逻辑干净。
+      */
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            const index = sections.indexOf(entry.target);
+            railLinks.forEach((link, linkIndex) => link.classList.toggle("is-active", linkIndex === index));
+          }
+        });
+      }, { root: null, rootMargin: "-18% 0px -45% 0px", threshold: [0.1, 0.35, 0.6] });
+
+      sections.forEach((section) => observer.observe(section));
+    }
+
+    function setupScrollEffects() {
+      if (reduceMotion) return;
+      let ticking = false;
+
+      function render() {
+        const max = document.documentElement.scrollHeight - window.innerHeight;
+        const ratio = max > 0 ? window.scrollY / max : 0;
+        progress.style.setProperty("--progress", `${ratio * 100}%`);
+
+        /*
+          轻量视差：
+          只处理少数带 data-parallax 的纸片，并用 getBoundingClientRect 计算相对视口位置。
+          结果写入 transform，不触发布局。移动端同样执行但幅度小，确保性能稳定。
+        */
+        document.querySelectorAll("[data-parallax]").forEach((el) => {
+          const speed = Number(el.dataset.parallax || 0);
+          const rect = el.getBoundingClientRect();
+          const center = rect.top + rect.height / 2 - window.innerHeight / 2;
+          const offset = center * speed * (window.innerWidth < 768 ? 0.35 : 1);
+          el.style.setProperty("--float", `${offset}px`);
+        });
+
+        ticking = false;
+      }
+
+      window.addEventListener("scroll", () => {
+        if (!ticking) {
+          window.requestAnimationFrame(render);
+          ticking = true;
+        }
+      }, { passive: true });
+      render();
+    }
+
+    function setupPointerEffects() {
+      if (!isFinePointer || reduceMotion) return;
+      const flare = document.querySelector(".cursor-flare");
+      window.addEventListener("pointermove", (event) => {
+        flare.style.opacity = "1";
+        flare.style.transform = `translate3d(${event.clientX}px, ${event.clientY}px, 0) translate3d(-50%, -50%, 0)`;
+        document.documentElement.style.setProperty("--glow-x", `${(event.clientX / window.innerWidth) * 100}%`);
+        document.documentElement.style.setProperty("--glow-y", `${(event.clientY / window.innerHeight) * 100}%`);
+      }, { passive: true });
+
+      document.querySelectorAll(".tilt-card").forEach((card) => {
+        card.addEventListener("pointermove", (event) => {
+          const rect = card.getBoundingClientRect();
+          const x = (event.clientX - rect.left) / rect.width - 0.5;
+          const y = (event.clientY - rect.top) / rect.height - 0.5;
+          card.style.transform = `rotateX(${y * -7}deg) rotateY(${x * 8}deg) translateY(-4px)`;
+        });
+        card.addEventListener("pointerleave", () => {
+          card.style.transform = "";
+        });
+      });
+    }
+
+    function setupFamilyTips() {
+      const tip = document.getElementById("familyTip");
+      const tipTitle = document.getElementById("tipTitle");
+      const tipText = document.getElementById("tipText");
+      const closeTip = document.getElementById("closeTip");
+
+      function openTip(button) {
+        const rect = button.getBoundingClientRect();
+        tipTitle.textContent = button.querySelector("strong").textContent;
+        tipText.textContent = button.dataset.note;
+        tip.style.left = `${Math.min(Math.max(rect.left + rect.width / 2, 140), window.innerWidth - 140)}px`;
+        tip.style.top = `${Math.max(rect.top - 12, 120)}px`;
+        tip.classList.add("is-open");
+        tip.setAttribute("aria-hidden", "false");
+      }
+
+      document.querySelectorAll(".family-node").forEach((button) => {
+        button.addEventListener("click", () => openTip(button));
+      });
+
+      closeTip.addEventListener("click", () => {
+        tip.classList.remove("is-open");
+        tip.setAttribute("aria-hidden", "true");
+      });
+
+      window.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          tip.classList.remove("is-open");
+          tip.setAttribute("aria-hidden", "true");
+        }
+      });
+    }
+
+    buildTypeQuote();
+    createButterflies();
+    createIronDots();
+    createRainSystem();
+    setupObserver();
+    setupScrollEffects();
+    setupPointerEffects();
+    setupFamilyTips();
+  </script>
+</body>
+</html>
