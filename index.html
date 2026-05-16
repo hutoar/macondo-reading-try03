@@ -1721,6 +1721,68 @@
         display: none;
       }
 
+      .genealogy {
+        min-height: auto;
+        align-items: start;
+        overflow: visible;
+        padding-top: calc(3.2rem + var(--safe-top));
+        padding-bottom: calc(3.8rem + var(--safe-bottom));
+      }
+
+      .genealogy .chapter-inner {
+        width: 100%;
+        max-width: 100%;
+      }
+
+      .genealogy .chapter-title {
+        font-size: clamp(2.25rem, 13vw, 3.25rem);
+        line-height: 1.05;
+        letter-spacing: 0.06em;
+      }
+
+      .genealogy .chapter-kicker {
+        margin-top: 0.85rem;
+        font-size: 0.95rem;
+        line-height: 1.72;
+      }
+
+      .genealogy .tarot-row {
+        grid-auto-flow: row;
+        grid-auto-columns: initial;
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        overflow: visible;
+        padding: 1.25rem 0 0;
+        scroll-snap-type: none;
+        scrollbar-width: none;
+      }
+
+      .genealogy .tarot-row::-webkit-scrollbar {
+        display: none;
+      }
+
+      .genealogy .tarot-card {
+        width: 100%;
+        min-height: auto;
+        padding: 1rem;
+        scroll-snap-align: none;
+        transform-style: flat;
+      }
+
+      .genealogy .tarot-card::after {
+        font-size: 5.4rem;
+      }
+
+      .genealogy .tarot-figure {
+        aspect-ratio: 3 / 4;
+        max-height: 24rem;
+      }
+
+      .genealogy .tarot-card p {
+        font-size: 0.9rem;
+        line-height: 1.72;
+      }
+
       .war-number {
         position: absolute;
         font-size: 9rem;
